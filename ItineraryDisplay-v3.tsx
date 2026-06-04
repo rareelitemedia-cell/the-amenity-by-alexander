@@ -223,8 +223,8 @@ async function generatePDF(data: ItineraryResponse): Promise<void> {
       if (photoB64) {
         checkPage(50);
         try {
-          doc.addImage(photoB64, 'JPEG', margin, y, contentW, 40);
-          y += 52;
+          doc.addImage(photoB64, 'JPEG', margin, y, contentW, 44);
+          y += 46;
         } catch (_) {}
       }
 
