@@ -21,7 +21,7 @@ For each day, start with breakfast, include lunch and dinner, and add activities
 
 For RESTAURANTS: include "menuUrl" — the direct link to their online menu (restaurant website menu page, Google Maps menu link, or leave "" if unknown).
 For ACTIVITIES/ATTRACTIONS: include "bookingUrl" — direct link to buy tickets or book (official website, Airbnb Experiences, Viator, etc. or "" if free entry).
-For travel between stops: include "walkingTime" (e.g. "14 min walk") AND "drivingTime" (e.g. "5 min drive / taxi") to the NEXT stop. Leave "" for the last item of each day.
+REQUIRED FOR EVERY ITEM except the last of each day: "walkingTime" (walking time to next stop, e.g. "12 min walk") AND "drivingTime" (Uber/taxi to next stop, e.g. "5 min drive"). Never leave these empty — they are mandatory.
 For "placesQuery": write the most specific Google Places search string to find this exact venue (e.g. "Café de Tacuba historic center Mexico City").
 
 Respond ONLY with raw valid JSON — no markdown, no backticks, no explanation:
