@@ -23,13 +23,16 @@ interface HistoryEntry {
 const HISTORY_KEY = 'amenity-history';
 const MAX_HISTORY = 10;
 
-function loadHistory(): HistoryEntry[] {
+const W = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
+
+async function loadHistory(): Promise<HistoryEntry[]> {
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    const res = await fetch(`${W}/api/history`);
+    return await res.json();
   } catch { return []; }
 }
 
-function saveToHistory(data: ItineraryResponse) {
+async function saveToHistory(data: ItineraryResponse): Promise<void> {
   const entry: HistoryEntry = {
     id: Date.now().toString(),
     city: data.city,
@@ -40,16 +43,15 @@ function saveToHistory(data: ItineraryResponse) {
     savedAt: new Date().toISOString(),
     data,
   };
-  const history = loadHistory().filter(h => h.id !== entry.id);
-  const updated = [entry, ...history].slice(0, MAX_HISTORY);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
-  return updated;
+  await fetch(`${W}/api/history`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry),
+  });
 }
 
-function deleteFromHistory(id: string): HistoryEntry[] {
-  const updated = loadHistory().filter(h => h.id !== id);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
-  return updated;
+async function deleteFromHistory(id: string): Promise<void> {
+  await fetch(`${W}/api/history/${id}`, { method: 'DELETE' });
 }
 
 function formatDate(iso: string) {
@@ -92,7 +94,7 @@ export default function App() {
 
   // Load history on mount
   useEffect(() => {
-    setHistory(loadHistory());
+    loadHistory().then(setHistory);
   }, []);
 
   const isLoading = phase === 'generating' || phase === 'enriching';
@@ -119,7 +121,7 @@ export default function App() {
       setItinerary(full);
       setPhase('done');
       // Save to history
-      setHistory(saveToHistory(full));
+      saveToHistory(full).then(() => loadHistory().then(setHistory));
     } catch (err) {
       clearInterval(iv1);
       setError(err instanceof Error ? err.message : 'Unexpected error');
@@ -137,7 +139,7 @@ export default function App() {
 
   const handleDeleteHistory = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setHistory(deleteFromHistory(id));
+    deleteFromHistory(id).then(() => loadHistory().then(setHistory));
   };
 
   return (
