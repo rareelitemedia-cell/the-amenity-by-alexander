@@ -2,7 +2,7 @@ import { ItineraryResponse, ItineraryItem } from '../types';
 
 const W = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 
-function buildPrompt(city: string, zone: string, type: string, days: number, budget: string, customPrompt: string): string {
+function buildPrompt(city: string, zone: string, type: string, days: number, budget: string, customPrompt: string, language: string): string {
   const budgetRules: Record<string, string> = {
     budget:         '$ only — street food, taquerías, mercados, fondas, casual local spots under $15 USD pp.',
     moderate:       '$$ — mid-range sit-down restaurants, casual bistros, popular local favorites, ~$15–40 USD pp.',
@@ -14,7 +14,11 @@ function buildPrompt(city: string, zone: string, type: string, days: number, bud
     ? `\nCRITICAL CUSTOM INSTRUCTIONS — these override defaults, follow them exactly:\n${customPrompt.trim()}\n`
     : '';
 
-  return `Create a bespoke ${days}-day travel itinerary for ${city}${zone ? `, focused on the ${zone} area` : ''}.
+  const langRule = language === 'es'
+    ? 'Respond entirely in Spanish. All descriptions, themes, thoughtProcess, and activity names must be in Spanish (keep proper venue names as-is).'
+    : 'Respond entirely in English.';
+
+  return `${langRule}\n\nCreate a bespoke ${days}-day travel itinerary for ${city}${zone ? `, focused on the ${zone} area` : ''}.
 Travel style: ${type} | Budget: ${budget}
 
 BUDGET RULE (strict — no exceptions): ${budgetRules[budget] || budgetRules.moderate}
@@ -63,7 +67,8 @@ export async function generateItinerary(
   type: string,
   days: number,
   budget: string,
-  customPrompt: string = ''
+  customPrompt: string = '',
+  language: string = 'en'
 ): Promise<ItineraryResponse> {
   const res = await fetch(`${W}/api/itinerary`, {
     method: 'POST',
@@ -72,7 +77,7 @@ export async function generateItinerary(
       model: 'claude-sonnet-4-5',
       max_tokens: 10000,
       system: 'You are an elite travel curator for "The Amenity by Alexander". You only recommend real, existing venues. Respond ONLY with raw valid JSON — no markdown, no backticks, nothing else.',
-      messages: [{ role: 'user', content: buildPrompt(city, zone, type, days, budget, customPrompt) }],
+      messages: [{ role: 'user', content: buildPrompt(city, zone, type, days, budget, customPrompt, language) }],
     }),
   });
 

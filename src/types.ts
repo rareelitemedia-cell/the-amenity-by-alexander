@@ -49,4 +49,5 @@ export interface FormValues {
   budget: string;
   thinking: boolean;
   customPrompt: string;
+  language: 'en' | 'es';
 }

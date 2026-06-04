@@ -18,6 +18,7 @@ export function ItineraryForm({ onGenerate, isLoading }: Props) {
   const [thinking, setThinking]       = useState(true);
   const [customPrompt, setCustomPrompt] = useState('');
   const [showCustom, setShowCustom]   = useState(false);
+  const [language, setLanguage]         = useState<'en' | 'es'>('en');
 
   const budgets = [
     { id: 'budget', label: '$' },
@@ -28,7 +29,7 @@ export function ItineraryForm({ onGenerate, isLoading }: Props) {
 
   const handleSubmit = () => {
     if (city.trim()) {
-      onGenerate({ city, zone, type, days, budget, thinking, customPrompt });
+      onGenerate({ city, zone, type, days, budget, thinking, customPrompt, language });
     }
   };
 
@@ -179,6 +180,28 @@ export function ItineraryForm({ onGenerate, isLoading }: Props) {
             animate={{ x: thinking ? 16 : 4 }}
             className={cn('w-2 h-2 rounded-full absolute top-1', thinking ? 'bg-primary' : 'bg-white/40')}
           />
+        </div>
+      </div>
+
+      {/* Language */}
+      <div>
+        <label className="label-micro">Language / Idioma</label>
+        <div className="flex gap-3 mt-3">
+          {(['en', 'es'] as const).map(lang => (
+            <button
+              key={lang}
+              type="button"
+              onClick={() => setLanguage(lang)}
+              className={cn(
+                'px-4 py-1.5 text-xs font-bold uppercase tracking-widest border transition-all',
+                language === lang
+                  ? 'border-primary text-primary bg-primary/10'
+                  : 'border-white/10 text-white/30 hover:text-white/50'
+              )}
+            >
+              {lang === 'en' ? '🇺🇸 English' : '🇲🇽 Español'}
+            </button>
+          ))}
         </div>
       </div>
 

@@ -98,7 +98,7 @@ export default function App() {
   const isLoading = phase === 'generating' || phase === 'enriching';
   const msgs = phase === 'enriching' ? ENRICHING_MSGS : LOADING_MSGS;
 
-  const handleGenerate = async ({ city, zone, type, days, budget, thinking, customPrompt }: FormValues) => {
+  const handleGenerate = async ({ city, zone, type, days, budget, thinking, customPrompt, language }: FormValues) => {
     setItinerary(null);
     setError(null);
     setShowThinking(thinking);
@@ -108,7 +108,7 @@ export default function App() {
 
     const iv1 = setInterval(() => setStep(s => (s + 1) % 5), 1400);
     try {
-      const data = await generateItinerary(city, zone, type, days, budget, customPrompt);
+      const data = await generateItinerary(city, zone, type, days, budget, customPrompt, language);
       clearInterval(iv1);
       setPhase('enriching');
       setStep(0);
