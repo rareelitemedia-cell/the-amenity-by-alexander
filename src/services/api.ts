@@ -2,27 +2,32 @@ import { ItineraryResponse, ItineraryItem } from '../types';
 
 const W = import.meta.env.VITE_WORKER_URL || 'http://localhost:8787';
 
-// ── Build the Claude prompt ────────────────────────────────────────
-function buildPrompt(city: string, zone: string, type: string, days: number, budget: string): string {
+function buildPrompt(city: string, zone: string, type: string, days: number, budget: string, customPrompt: string): string {
   const budgetRules: Record<string, string> = {
-    budget:       '$ only — street food, taquerías, mercados, fondas, casual local spots. No sit-down restaurants over $15 USD per person.',
-    moderate:     '$$ — mid-range sit-down restaurants, casual bistros, popular local favorites. Max ~$40 USD per person.',
-    luxury:       '$$$ — upscale restaurants, wine bars, chef-driven concepts, polished service. $50–$120 USD per person.',
-    'ultra-luxury': '$$$$ — fine dining, Michelin-starred or equivalent, omakase, tasting menus, private clubs. $120+ USD per person.',
+    budget:         '$ only — street food, taquerías, mercados, fondas, casual local spots under $15 USD pp.',
+    moderate:       '$$ — mid-range sit-down restaurants, casual bistros, popular local favorites, ~$15–40 USD pp.',
+    luxury:         '$$$ — upscale restaurants, chef-driven concepts, polished service, $50–120 USD pp.',
+    'ultra-luxury': '$$$$ — fine dining, Michelin-level, omakase, tasting menus, $120+ USD pp.',
   };
 
-  return `Create a bespoke ${days}-day travel itinerary for ${city}${zone ? `, focused on ${zone}` : ''}.
-Travel style: ${type} | Budget tier: ${budget}
+  const customSection = customPrompt.trim()
+    ? `\nCRITICAL CUSTOM INSTRUCTIONS — these override defaults, follow them exactly:\n${customPrompt.trim()}\n`
+    : '';
 
-BUDGET RULE (strict): ${budgetRules[budget] || budgetRules.moderate}
-Every single restaurant and food stop must match this budget tier exactly. Do NOT mix tiers.
+  return `Create a bespoke ${days}-day travel itinerary for ${city}${zone ? `, focused on the ${zone} area` : ''}.
+Travel style: ${type} | Budget: ${budget}
 
-For each day, start with breakfast, include lunch and dinner, and add activities/attractions between meals.
+BUDGET RULE (strict — no exceptions): ${budgetRules[budget] || budgetRules.moderate}
+Every restaurant and food stop must match this budget tier. Do NOT mix tiers.
 
-For RESTAURANTS: include "menuUrl" — the direct link to their online menu (restaurant website menu page, Google Maps menu link, or leave "" if unknown).
-For ACTIVITIES/ATTRACTIONS: include "bookingUrl" — direct link to buy tickets or book (official website, Airbnb Experiences, Viator, etc. or "" if free entry).
-REQUIRED FOR EVERY ITEM except the last of each day: "walkingTime" (walking time to next stop, e.g. "12 min walk") AND "drivingTime" (Uber/taxi to next stop, e.g. "5 min drive"). Never leave these empty — they are mandatory.
-For "placesQuery": write the most specific Google Places search string to find this exact venue (e.g. "Café de Tacuba historic center Mexico City").
+Start each day with breakfast, include lunch, afternoon activity, and dinner.
+${customSection}
+REQUIRED FIELDS for every item:
+- "walkingTime": walking time to the NEXT stop (e.g. "12 min walk"). Use "" only for the last item of the day.
+- "drivingTime": drive/Uber time to the NEXT stop (e.g. "5 min drive"). Use "" only for the last item of the day.
+- "menuUrl": for restaurants, direct link to online menu or website. Use "" if unknown.
+- "bookingUrl": for activities/attractions, direct link to book tickets. Use "" if unknown or free.
+- "placesQuery": specific Google Places search string for this exact venue.
 
 Respond ONLY with raw valid JSON — no markdown, no backticks, no explanation:
 {
@@ -38,9 +43,9 @@ Respond ONLY with raw valid JSON — no markdown, no backticks, no explanation:
     "items": [{
       "time": "08:00 AM",
       "activity": "string (venue name)",
-      "description": "string (evocative, specific, 1-2 sentences)",
-      "location": "string (real street address or neighborhood)",
-      "priceRange": "string (e.g. '$12 pp' or '$$$')",
+      "description": "string (evocative, specific, 1–2 sentences)",
+      "location": "string (real address or neighborhood)",
+      "priceRange": "string",
       "type": "attraction|restaurant|activity|travel",
       "menuUrl": "string",
       "bookingUrl": "string",
@@ -52,13 +57,13 @@ Respond ONLY with raw valid JSON — no markdown, no backticks, no explanation:
 }`;
 }
 
-// ── Generate itinerary via Claude ──────────────────────────────────
 export async function generateItinerary(
   city: string,
   zone: string,
   type: string,
   days: number,
-  budget: string
+  budget: string,
+  customPrompt: string = ''
 ): Promise<ItineraryResponse> {
   const res = await fetch(`${W}/api/itinerary`, {
     method: 'POST',
@@ -67,7 +72,7 @@ export async function generateItinerary(
       model: 'claude-sonnet-4-5',
       max_tokens: 10000,
       system: 'You are an elite travel curator for "The Amenity by Alexander". You only recommend real, existing venues. Respond ONLY with raw valid JSON — no markdown, no backticks, nothing else.',
-      messages: [{ role: 'user', content: buildPrompt(city, zone, type, days, budget) }],
+      messages: [{ role: 'user', content: buildPrompt(city, zone, type, days, budget, customPrompt) }],
     }),
   });
 
@@ -79,7 +84,6 @@ export async function generateItinerary(
   return JSON.parse(clean) as ItineraryResponse;
 }
 
-// ── Enrich one item with Google Places ────────────────────────────
 async function enrichItem(item: ItineraryItem, city: string): Promise<ItineraryItem> {
   if (item.type === 'travel') return item;
   try {
@@ -104,7 +108,6 @@ async function enrichItem(item: ItineraryItem, city: string): Promise<ItineraryI
 
     return {
       ...item,
-      // Use Places website if Claude didn't find one
       menuUrl: item.menuUrl || (item.type === 'restaurant' ? place.websiteUri || '' : ''),
       bookingUrl: item.bookingUrl || (item.type !== 'restaurant' ? place.websiteUri || '' : ''),
       places: {
@@ -122,7 +125,6 @@ async function enrichItem(item: ItineraryItem, city: string): Promise<ItineraryI
   }
 }
 
-// ── Enrich full itinerary ─────────────────────────────────────────
 export async function enrichItinerary(
   itinerary: ItineraryResponse['itinerary'],
   city: string
@@ -135,7 +137,6 @@ export async function enrichItinerary(
   );
 }
 
-// ── Download map via Google Static Maps ───────────────────────────
 export async function downloadMap(
   itinerary: ItineraryResponse['itinerary'],
   city: string
@@ -152,7 +153,7 @@ export async function downloadMap(
   );
 
   if (!markers.length) {
-    alert('No map coordinates available. Make sure Google Places is configured.');
+    alert('No map coordinates available.');
     return;
   }
 

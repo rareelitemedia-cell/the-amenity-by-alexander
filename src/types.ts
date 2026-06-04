@@ -15,6 +15,7 @@ export interface ItineraryItem {
   description: string;
   location: string;
   priceRange?: string;
+  travelTime?: string;
   type: 'attraction' | 'restaurant' | 'activity' | 'travel';
   menuUrl?: string;
   bookingUrl?: string;
@@ -47,4 +48,5 @@ export interface FormValues {
   days: number;
   budget: string;
   thinking: boolean;
+  customPrompt: string;
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Sparkles, ChevronRight, BrainCircuit, MapPin } from 'lucide-react';
+import { Sparkles, ChevronRight, BrainCircuit, MapPin, SlidersHorizontal } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { FormValues } from '../types';
 
@@ -10,12 +10,14 @@ interface Props {
 }
 
 export function ItineraryForm({ onGenerate, isLoading }: Props) {
-  const [city, setCity]       = useState('');
-  const [zone, setZone]       = useState('');
-  const [type, setType]       = useState('relaxing');
-  const [days, setDays]       = useState(3);
-  const [budget, setBudget]   = useState('luxury');
-  const [thinking, setThinking] = useState(true);
+  const [city, setCity]               = useState('');
+  const [zone, setZone]               = useState('');
+  const [type, setType]               = useState('relaxing');
+  const [days, setDays]               = useState(3);
+  const [budget, setBudget]           = useState('luxury');
+  const [thinking, setThinking]       = useState(true);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [showCustom, setShowCustom]   = useState(false);
 
   const budgets = [
     { id: 'budget', label: '$' },
@@ -26,7 +28,7 @@ export function ItineraryForm({ onGenerate, isLoading }: Props) {
 
   const handleSubmit = () => {
     if (city.trim()) {
-      onGenerate({ city, zone, type, days, budget, thinking });
+      onGenerate({ city, zone, type, days, budget, thinking, customPrompt });
     }
   };
 
@@ -115,6 +117,50 @@ export function ItineraryForm({ onGenerate, isLoading }: Props) {
           {budget === 'luxury' && 'Upscale, chef-driven, polished service'}
           {budget === 'ultra-luxury' && 'Fine dining, Michelin-level, omakase'}
         </p>
+      </div>
+
+      {/* Custom prompt toggle */}
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowCustom(!showCustom)}
+          className="flex items-center justify-between w-full group"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className={cn('w-3 h-3 transition-colors', showCustom || customPrompt ? 'text-primary' : 'text-white/30')} />
+            <span className={cn('text-[10px] uppercase tracking-widest font-bold transition-colors', showCustom || customPrompt ? 'text-white/70' : 'text-white/30')}>
+              Custom Instructions
+              {customPrompt && <span className="ml-2 text-primary">●</span>}
+            </span>
+          </div>
+          <span className="text-[9px] text-white/20">{showCustom ? '▲' : '▼'}</span>
+        </button>
+
+        {showCustom && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-3"
+          >
+            <textarea
+              value={customPrompt}
+              onChange={e => setCustomPrompt(e.target.value)}
+              placeholder={`Tell Claude anything extra, for example:\n\n"No seafood — I'm allergic"\n"Include a high-risk adventure activity"\n"Make sure dinner is in the Zona Romántica"\n"I'm traveling with a 5-year-old"\n"Include a cooking class"`}
+              rows={5}
+              className="w-full bg-transparent border border-white/10 focus:border-primary/50 outline-none p-3 text-sm text-white/70 font-light placeholder:text-white/20 resize-none transition-colors rounded-sm leading-relaxed"
+            />
+            {customPrompt && (
+              <button
+                type="button"
+                onClick={() => setCustomPrompt('')}
+                className="text-[10px] text-white/20 hover:text-white/40 uppercase tracking-widest mt-1 transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </motion.div>
+        )}
       </div>
 
       {/* Thinking Mode */}
