@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowUpRight, UtensilsCrossed, Ticket, Car, Footprints, Download } from 'lucide-react';
+import { ArrowUpRight, UtensilsCrossed, Ticket, Car, Footprints, Download, Loader } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { cn } from '../lib/utils';
 import { ItineraryResponse, ItineraryItem } from '../types';
@@ -55,8 +56,8 @@ function TravelBadge({ item }: { item: ItineraryItem }) {
 }
 
 function ItemCard({ item, index, isLast }: { item: ItineraryItem; index: number; isLast: boolean }) {
-  const menuLink  = item.menuUrl && item.menuUrl !== '' ? item.menuUrl : (item.type === 'restaurant' ? item.places?.website : null);
-  const bookLink  = item.bookingUrl && item.bookingUrl !== '' ? item.bookingUrl : (item.type !== 'restaurant' ? item.places?.website : null);
+  const menuLink = item.menuUrl && item.menuUrl !== '' ? item.menuUrl : (item.type === 'restaurant' ? item.places?.website : null);
+  const bookLink = item.bookingUrl && item.bookingUrl !== '' ? item.bookingUrl : (item.type !== 'restaurant' ? item.places?.website : null);
 
   return (
     <>
@@ -129,37 +130,72 @@ function ItemCard({ item, index, isLast }: { item: ItineraryItem; index: number;
   );
 }
 
-// ── jsPDF direct download ─────────────────────────────────────────
-function handleDownloadPDF(data: ItineraryResponse) {
+// ── Fetch photo as base64 ─────────────────────────────────────────
+async function fetchBase64(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+// ── Generate PDF with photos ──────────────────────────────────────
+async function generatePDF(data: ItineraryResponse): Promise<void> {
+  // Pre-fetch all photos in parallel
+  const photoUrls = data.itinerary
+    .flatMap(d => d.items)
+    .filter(i => i.places?.photoUrl)
+    .map(i => i.places!.photoUrl!);
+
+  const photoMap: Record<string, string | null> = {};
+  await Promise.all(
+    [...new Set(photoUrls)].map(async (url) => {
+      photoMap[url] = await fetchBase64(url);
+    })
+  );
+
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const margin = 20;
+  const margin = 18;
+  const contentW = pageW - margin * 2;
   let y = margin;
 
   const checkPage = (needed = 10) => {
     if (y + needed > pageH - margin) { doc.addPage(); y = margin; }
   };
 
-  // Header
+  // ── Cover header ──────────────────────────────────────────────
   doc.setFillColor(10, 10, 11);
-  doc.rect(0, 0, pageW, 45, 'F');
+  doc.rect(0, 0, pageW, 48, 'F');
   doc.setTextColor(163, 138, 94);
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
   doc.text('THE AMENITY BY ALEXANDER  ·  LUXURY TRAVEL ADVISORY', margin, 13);
   doc.setTextColor(229, 229, 229);
   doc.setFontSize(26);
   doc.setFont('helvetica', 'bold');
-  doc.text(data.city.toUpperCase(), margin, 29);
+  doc.text(data.city.toUpperCase(), margin, 30);
   doc.setTextColor(163, 138, 94);
   doc.setFontSize(8.5);
   doc.setFont('helvetica', 'normal');
-  const meta = [data.duration + (data.duration === 1 ? ' Day' : ' Days'), data.type, data.budget, data.zone].filter(Boolean).join('  ·  ');
-  doc.text(meta, margin, 39);
-  y = 54;
+  const metaStr = [
+    data.duration + (data.duration === 1 ? ' Day' : ' Days'),
+    data.type, data.budget, data.zone,
+  ].filter(Boolean).join('  ·  ');
+  doc.text(metaStr, margin, 41);
+  y = 56;
 
-  data.itinerary.forEach((day) => {
-    checkPage(20);
+  // ── Days ──────────────────────────────────────────────────────
+  for (const day of data.itinerary) {
+    checkPage(22);
     doc.setDrawColor(163, 138, 94);
     doc.setLineWidth(0.25);
     doc.line(margin, y, pageW - margin, y);
@@ -173,78 +209,113 @@ function handleDownloadPDF(data: ItineraryResponse) {
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(130, 130, 130);
       doc.text(day.theme.toUpperCase(), margin, y + 5);
-      y += 11;
+      y += 12;
     } else {
-      y += 7;
+      y += 8;
     }
-    y += 3;
 
-    day.items?.forEach((item, i) => {
+    for (let i = 0; i < (day.items?.length || 0); i++) {
+      const item = day.items[i];
+      const isLast = i === day.items.length - 1;
+
+      // Photo
+      const photoB64 = item.places?.photoUrl ? photoMap[item.places.photoUrl] : null;
+      if (photoB64) {
+        checkPage(50);
+        try {
+          doc.addImage(photoB64, 'JPEG', margin, y, contentW, 44);
+          y += 46;
+        } catch (_) {}
+      }
+
       checkPage(22);
+
+      // Time + name
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(160, 160, 160);
       doc.text(item.time, margin, y);
+
       doc.setFontSize(10.5);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(20, 20, 20);
-      doc.text(item.activity.toUpperCase(), margin + 22, y);
+      doc.text(item.activity.toUpperCase(), margin + 20, y);
       y += 5;
 
+      // Description
       if (item.description) {
         doc.setFontSize(8);
         doc.setFont('helvetica', 'italic');
         doc.setTextColor(90, 90, 90);
-        const lines = doc.splitTextToSize(item.description, pageW - margin * 2 - 22);
+        const lines = doc.splitTextToSize(item.description, contentW - 20);
         checkPage(lines.length * 4 + 3);
-        doc.text(lines, margin + 22, y);
+        doc.text(lines, margin + 20, y);
         y += lines.length * 4 + 1;
       }
 
+      // Location + price
       const loc = [item.location, item.priceRange].filter(Boolean).join('  ·  ');
       if (loc) {
         doc.setFontSize(7.5);
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(140, 140, 140);
-        doc.text(loc, margin + 22, y);
+        doc.text(loc, margin + 20, y);
         y += 4;
       }
 
+      // Rating
       if (item.places?.rating) {
         doc.setFontSize(7.5);
         doc.setTextColor(163, 138, 94);
-        doc.text(`★ ${item.places.rating.toFixed(1)}${item.places.reviewCount ? '  (' + item.places.reviewCount.toLocaleString() + ' reviews)' : ''}`, margin + 22, y);
+        const ratingStr = `★ ${item.places.rating.toFixed(1)}${item.places.reviewCount ? '  (' + item.places.reviewCount.toLocaleString() + ' reviews)' : ''}`;
+        doc.text(ratingStr, margin + 20, y);
         y += 4;
       }
 
-      const isLast = i === (day.items?.length || 0) - 1;
+      // Travel time to next
       if (!isLast && (item.walkingTime || item.drivingTime)) {
         y += 1;
         doc.setFontSize(7);
         doc.setTextColor(180, 180, 180);
-        const times = [item.walkingTime ? `Walk: ${item.walkingTime}` : '', item.drivingTime ? `Drive: ${item.drivingTime}` : ''].filter(Boolean).join('   ');
-        doc.text(times, margin + 22, y);
-        y += 5;
+        const times = [
+          item.walkingTime ? `Walk: ${item.walkingTime}` : '',
+          item.drivingTime ? `Drive: ${item.drivingTime}` : '',
+        ].filter(Boolean).join('   ');
+        doc.text(times, margin + 20, y);
+        y += 6;
       } else {
         y += 5;
       }
-    });
+    }
     y += 6;
-  });
+  }
 
-  checkPage(8);
+  // Footer
+  checkPage(10);
   doc.setDrawColor(163, 138, 94);
   doc.setLineWidth(0.2);
   doc.line(margin, y, pageW - margin, y);
   y += 4;
   doc.setFontSize(6.5);
   doc.setTextColor(163, 138, 94);
-  doc.text('ESTABLISHED MMXXVI  ·  ALEXANDER TRAVEL ADVISORY GROUP', margin, y);
+  doc.text('ESTABLISHED MMXXVI  ·  ALEXANDER TRAVEL ADVISORY GROUP  ·  CLAUDE + GOOGLE PLACES', margin, y);
 
   doc.save(`${data.city.toLowerCase().replace(/\s+/g, '-')}-itinerary.pdf`);
 }
 
+// ── Main component ────────────────────────────────────────────────
 export function ItineraryDisplay({ data, showThinking }: Props) {
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    setPdfLoading(true);
+    try {
+      await generatePDF(data);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   return (
     <div className="relative h-full flex flex-col">
       <div className="absolute top-0 right-0 text-[120px] md:text-[180px] font-black text-white/[0.025] leading-none pointer-events-none select-none uppercase tracking-tighter overflow-hidden z-0">
@@ -294,11 +365,14 @@ export function ItineraryDisplay({ data, showThinking }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => handleDownloadPDF(data)}
-              className="flex items-center gap-2 border border-primary/30 text-primary text-[10px] uppercase tracking-widest px-4 py-2 hover:bg-primary/10 transition-colors"
+              onClick={handleDownloadPDF}
+              disabled={pdfLoading}
+              className="flex items-center gap-2 border border-primary/30 text-primary text-[10px] uppercase tracking-widest px-4 py-2 hover:bg-primary/10 transition-colors disabled:opacity-50"
             >
-              <Download className="w-3 h-3" />
-              Download PDF
+              {pdfLoading
+                ? <><Loader className="w-3 h-3 animate-spin" /> Generating...</>
+                : <><Download className="w-3 h-3" /> Download PDF</>
+              }
             </button>
           </div>
         </footer>
