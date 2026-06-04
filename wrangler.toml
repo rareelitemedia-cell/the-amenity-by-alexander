@@ -1,0 +1,7 @@
+name = "the-amenity-worker"
+main = "worker/index.js"
+compatibility_date = "2025-01-01"
+
+# Secrets (set via dashboard or CLI — never commit real values):
+# wrangler secret put ANTHROPIC_API_KEY
+# wrangler secret put GOOGLE_API_KEY
