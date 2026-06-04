@@ -22,7 +22,7 @@ Every restaurant and food stop must match this budget tier. Do NOT mix tiers.
 
 Start each day with breakfast, include lunch, afternoon activity, and dinner.
 ${customSection}
-REQUIRED FIELDS for every item:
+${customPrompt.trim() ? `\n\u26a0\ufe0f NON-NEGOTIABLE USER REQUIREMENTS — follow these EXACTLY, they override everything else:\n${customPrompt.trim()}\n\u26a0\ufe0f END OF REQUIREMENTS\n` : ''}REQUIRED FIELDS for every item:
 - "walkingTime": walking time to the NEXT stop (e.g. "12 min walk"). Use "" only for the last item of the day.
 - "drivingTime": drive/Uber time to the NEXT stop (e.g. "5 min drive"). Use "" only for the last item of the day.
 - "menuUrl": for restaurants, direct link to online menu or website. Use "" if unknown.
